@@ -39,7 +39,33 @@ class ComplexCustomFeeder extends Simulation {
       "rating" -> ("Rating-" + randomString(5)),
     ))
 
+  // Call to authenticate the user and get an auth token to make the further authenticated calls
+  def authenticateUser() = {
+    exec(
+      http("Authenticate user")
+        .post("/authenticate")
+        .body(StringBody("{\n  \"password\": \"admin\",\n  \"username\": \"admin\"\n}")).asJson
+        .check(jsonPath("$.token").saveAs("AUTH_TOKEN")) // Saving auth token in a session variable
+    )
+  }
+
+  def addGame() = {
+    repeat(10) {
+      feed(customFeeder)
+        .exec(
+          http("Add a new game: #{name}")
+            .post("/videogame")
+            .header("Authorization", "Bearer #{AUTH_TOKEN}")
+            .body(ElFileBody("bodies/NewGameTemplate.json")).asJson
+            .check(bodyString.saveAs("resBody"))
+        ).exec { session => println(session("resBody").as[String]); session }
+        .pause(1)
+    }
+  }
+
   val scn = scenario("Complex custom feeder")
+    .exec(authenticateUser())
+    .exec(addGame())
 
   setUp(
     scn.inject(atOnceUsers(1))
